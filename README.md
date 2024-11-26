@@ -84,6 +84,6 @@ To run the app locally:
    
 `streamlit run src/app.py`
 
-![https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/Streamlit.png]
+!(https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/Streamlit.png)
 
 
