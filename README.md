@@ -9,12 +9,12 @@ This repository contains the code and instructions for deploying a chatbot using
    - [Deploy CloudFormation Stack](#1-deploy-cloudformation-stack)
    - [Upload CSV Files to S3](#2-upload-csv-files-to-s3)
    - [Create Bedrock Knowledge Base](#3-create-bedrock-knowledge-base)
-   - [Update Lambda Function](#update-lambda-function)
-   - [Update Lambda Layer](#update-lambda-layer)
-   - [Get API Gateway Invoke URL](#Get-API-Gateway-Invoke-URL)
-   - [Deploy Streamlit Frontend](#Deploy-Streamlit-Frontend)
-   - [Update API Gateway Endpoint](#Update-API-Gateway-Endpoint)
-   - [Run the Streamlit App](#Run-the-Streamlit-App)
+   - [Update Lambda Function](#4-update-lambda-function)
+   - [Update Lambda Layer](#5-update-lambda-layer)
+   - [Get API Gateway Invoke URL](#6-Get-API-Gateway-Invoke-URL)
+   - [Deploy Streamlit Frontend](#7-Deploy-Streamlit-Frontend)
+   - [Update API Gateway Endpoint](#8-Update-API-Gateway-Endpoint)
+   - [Run the Streamlit App](#9-Run-the-Streamlit-App)
 
 
 
