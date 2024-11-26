@@ -1,13 +1,26 @@
-# aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot
+# AWS Streamlit API Gateway LangChain Bedrock DynamoDB Chatbot
+
+This repository contains the code and instructions for deploying a chatbot using AWS services including API Gateway, Lambda, Bedrock, and DynamoDB, with a Streamlit frontend.
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Prerequisites](#prerequisites)
+4. [Setup Instructions](#setup-instructions)
+5. [Running the Application](#running-the-application)
+6. [API Gateway Configuration](#api-gateway-configuration)
+7. [DynamoDB Configuration](#dynamodb-configuration)
+8. [Bedrock Configuration](#bedrock-configuration)
+9. [Troubleshooting](#troubleshooting)
+
+
+## Overview
+
+This repository contains the code and instructions for deploying a chatbot using AWS services including API Gateway, Lambda, Bedrock, and DynamoDB, with a Streamlit frontend.
 
 ## Architecture
 
-   ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/architecture.jpg)
-
-
-   # AWS Streamlit API Gateway LangChain Bedrock DynamoDB Chatbot
-
-This repository contains the code and instructions for deploying a chatbot using AWS services including API Gateway, Lambda, Bedrock, and DynamoDB, with a Streamlit frontend.
+   ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/architecture.jpg)    
 
 ## Deployment Steps
 
