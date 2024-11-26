@@ -70,13 +70,13 @@ Follow these steps to create and sync a knowledge base in Amazon Bedrock:
 
 ### 4. Update Lambda Function
 
-Update the following variables in the Lambda function code:
+Update the following environment variables in the Lambda function code:
 
 - `bedrock_model_id`: Find this in the Bedrock console under "Model access"
 - `knowledge_base_id`: Use the ID noted from step 3
 - `region_name`: Your AWS region
 
-[Image Placeholder: Screenshot of updating Lambda function code]
+![](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/environment%20variables.png)
 
 ### 5. Update Lambda Layer
 
