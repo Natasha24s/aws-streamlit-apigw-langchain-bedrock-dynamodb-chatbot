@@ -80,11 +80,17 @@ Follow the instructions in `streamlit-apigateway-frontend.md` to deploy the Stre
 
 In the Streamlit app code, update the `config.py` file to ue your own API Gateway endpoint URL you got in step 6.
 
+![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/config.py%20file.png)
+
 ### 9. Run the Streamlit App
 
 To run the app locally:
    
 `streamlit run src/app.py`
+
+![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/streamlit%20run%20command.png)
+
+It will show up in your browser as shown below:
 
 ![](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/Streamlit.png)
 
