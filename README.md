@@ -5,7 +5,7 @@ This repository contains the code and instructions for deploying a chatbot using
 ## Table of Contents
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Deployment Steps](#deployment steps)
+3. [Deployment Steps](#deploymentsteps)
 4. [Setup Instructions](#setup-instructions)
 5. [Running the Application](#running-the-application)
 6. [API Gateway Configuration](#api-gateway-configuration)
