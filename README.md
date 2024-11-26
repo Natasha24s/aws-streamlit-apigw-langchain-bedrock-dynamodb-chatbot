@@ -46,7 +46,7 @@ This repository contains the code and instructions for deploying a chatbot using
 Once the CloudFormation stack is deployed:
 
 1. Open the S3 bucket created by the stack. You can find it in the resource section of your CloudFormation template.
-2. Upload the CSV files that will be used for Retrieval Augmented Generation (RAG)
+2. Upload the CSV files that will be used for Retrieval Augmented Generation (RAG). You can also upload the Product Dataset.csv file from above.
 
 ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/s3%20put%20object.png)
 
