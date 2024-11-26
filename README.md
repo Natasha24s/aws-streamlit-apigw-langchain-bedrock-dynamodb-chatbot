@@ -30,7 +30,10 @@ This repository contains the code and instructions for deploying a chatbot using
 
 ### 1. Deploy CloudFormation Stack
 
-Deploy the CloudFormation template to create the following resources:
+1. Download the [chatbot-complete-template.yaml](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/chatbot-complete-template.yaml) file.
+2. Open AWS and select a region of your choice.
+3. Open Cloudformation and click on `Create Stack` and select the downloaded template.
+4. It will deploy the following resources:
 
 - API Gateway
 - Lambda Function
