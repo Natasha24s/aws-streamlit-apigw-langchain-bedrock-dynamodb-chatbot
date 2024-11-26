@@ -78,7 +78,7 @@ Follow the instructions in `streamlit-apigateway-frontend.md` to deploy the Stre
 
 ### 8. Update API Gateway Endpoint
 
-In the Streamlit app code, update the `config.py` file to ue your own API Gateway endpoint URL you got in step 6.
+In the Streamlit app code, update the `config.py` file to use your own API Gateway endpoint URL you got in step 6.
 
 ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/config.py%20file.png)
 
