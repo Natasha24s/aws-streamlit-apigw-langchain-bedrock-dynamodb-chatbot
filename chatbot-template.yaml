@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Chatbot Infrastructure with AWS Bedrock, API Gateway, Lambda, and DynamoDB'
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name for the S3 bucket (must be globally unique)
+
+Resources:
+  # S3 Bucket
+  ChatbotBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:*
+                Resource: '*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt ConversationHistoryTable.Arn
+
+  # DynamoDB Table
+  ConversationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ConversationHistory
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: SessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: SessionId
+          KeyType: HASH
+
+  # API Gateway
+  ChatbotApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: ChatbotAPI
+      Description: API for Chatbot
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ChatbotApi.RootResourceId
+      PathPart: chat
+      RestApiId: !Ref ChatbotApi
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId: !Ref ApiResource
+      RestApiId: !Ref ChatbotApi
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatbotLambda.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: ''
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseModels:
+            application/json: 'Empty'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref ChatbotApi
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiDeployment
+      RestApiId: !Ref ChatbotApi
+      StageName: prod
+
+  # Lambda Function
+  ChatbotLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          # Lambda function code placeholder
+          # Replace this with your actual Lambda function code
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': '{"message": "Lambda function placeholder"}'
+              }
+      Runtime: python3.9
+      Timeout: 300
+      MemorySize: 256
+
+  # Lambda Permission for API Gateway
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ChatbotLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatbotApi}/*/POST/chat
+
+Outputs:
+  ApiEndpoint:
+    Description: API Endpoint URL
+    Value: !Sub https://${ChatbotApi}.execute-api.${AWS::Region}.amazonaws.com/prod/chat
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref ConversationHistoryTable
+
+  S3BucketName:
+    Description: S3 Bucket Name
+    Value: !Ref ChatbotBucket
+
