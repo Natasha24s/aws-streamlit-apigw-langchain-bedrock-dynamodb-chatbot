@@ -2,7 +2,7 @@
 
 ## Architecture
 
-   ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/architecture.jpg)
+   ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/architecture.jpg)
 
 
    # AWS Streamlit API Gateway LangChain Bedrock DynamoDB Chatbot
@@ -84,6 +84,6 @@ To run the app locally:
    
 `streamlit run src/app.py`
 
-[Image Placeholder: Screenshot of Streamlit deployment steps]
+![https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/Streamlit.png]
 
 
