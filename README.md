@@ -24,7 +24,7 @@ This repository contains the code and instructions for deploying a chatbot using
 
 ## Architecture
 
-   ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/architecture.jpg)    
+   ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/arch.jpg)    
 
 ## Deployment Steps
 
