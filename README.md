@@ -6,6 +6,13 @@ This repository contains the code and instructions for deploying a chatbot using
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Deployment Steps](#deploymentsteps)
+   - [Deploy CloudFormation Stack](#deploy-cloudformation-stack)
+   - [Upload CSV Files to S3](#upload-csv-files-to-S3)
+   - [Create Bedrock Knowledge Base](#create-bedrock-knowledge-base)
+   - [Update Lambda Function](#update-lambda-function)
+   - [Update Lambda Layer](#update-lambda-layer)
+   - [Get API Gateway Invoke URL](#Get-API-Gateway-Invoke-URL)
+
 4. [Setup Instructions](#setup-instructions)
 5. [Running the Application](#running-the-application)
 6. [API Gateway Configuration](#api-gateway-configuration)
