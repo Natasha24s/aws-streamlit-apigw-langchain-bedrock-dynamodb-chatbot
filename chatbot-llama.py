@@ -4,7 +4,6 @@ import boto3
 import time
 from typing import Any, List, Mapping, Optional, Iterator
 from langchain.callbacks.manager import CallbackManagerForLLMRun
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 import logging
 from langchain.schema import AIMessage, BaseMessage, ChatResult, HumanMessage, SystemMessage, ChatGeneration
@@ -44,7 +43,7 @@ class BedrockLlama3ChatModel(BaseChatModel):
         stop: Optional[List[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
-    ) -> ChatResult:
+    ) -> Iterator[str]:
         prompt = self._convert_messages_to_prompt(messages)
 
         body = json.dumps({
@@ -61,22 +60,14 @@ class BedrockLlama3ChatModel(BaseChatModel):
             body=body
         )
 
-        full_response = self._process_stream(response_stream)
-        
-        logger.info(f"Bedrock Llama 3 model response: {full_response}")
-        
-        ai_message = AIMessage(content=full_response)
-        chat_generation = ChatGeneration(message=ai_message)
-        return ChatResult(generations=[chat_generation])
+        return self._process_stream(response_stream)
 
-    def _process_stream(self, response_stream: Iterator[Any]) -> str:
-        full_response = ""
+    def _process_stream(self, response_stream: Iterator[Any]) -> Iterator[str]:
         for event in response_stream['body']:
             if 'chunk' in event:
                 chunk = json.loads(event['chunk']['bytes'].decode())
                 if 'generation' in chunk:
-                    full_response += chunk['generation']
-        return full_response.strip()
+                    yield chunk['generation']
 
     def _convert_messages_to_prompt(self, messages: List[BaseMessage]) -> str:
         prompt = ""
@@ -135,40 +126,32 @@ def lambda_handler(event, context):
             }
 
         # Initialize DynamoDBChatMessageHistory
-        logger.info(f"Initializing DynamoDBChatMessageHistory with session_id: {session_id}")
         message_history = DynamoDBChatMessageHistory(
             table_name="ConversationHistory",
             session_id=session_id,
         )
-        logger.info("DynamoDBChatMessageHistory initialized successfully")
 
         # Retrieve chat history
-        logger.info("Retrieving chat history")
         chat_history = message_history.messages
-        logger.info(f"Retrieved {len(chat_history)} messages from history")
 
         # Add the new user message to the history
-        logger.info(f"Adding user message to history: {user_input}")
         message_history.add_user_message(user_input)
-        logger.info("User message added successfully")
 
-        # Initialize AmazonKnowledgeBasesRetriever with return_source_documents=True
+        # Initialize AmazonKnowledgeBasesRetriever
         retriever = AmazonKnowledgeBasesRetriever(
             knowledge_base_id=knowledge_base_id,
             retrieval_config={"vectorSearchConfiguration": {"numberOfResults": 4}},
-            region_name="us-east-2",  # Adjust the region if necessary
+            region_name="us-east-2",
             return_source_documents=True
         )
 
         # Retrieve relevant documents
-        logger.info("Retrieving relevant documents")
         docs = retriever.get_relevant_documents(user_input)
         context = "\n".join([f"Source {i+1}: {doc.page_content}" for i, doc in enumerate(docs)])
-        logger.info(f"Retrieved {len(docs)} relevant documents")
 
         # Create a custom prompt template
         prompt_template = """
-        Use the following context and chat history to answer the question. Your response should be structured as a summary of the TV products mentioned in the search results, with bullet points for each product and its key features. Include the source number for each product.
+        Use the following context and chat history to answer the question. Your response should be a concise summary of the information found in the search results, with key points or features listed in bullet points if appropriate.
 
         Context:
         {context}
@@ -179,21 +162,18 @@ def lambda_handler(event, context):
         Question: {question}
 
         Generate a response in the following format:
-        The search results contain information about several TV products, including:
-        - [Brand] [Size] [Color] [Product Type] ([Model Number]) with [key feature 1], [key feature 2], and [key feature 3]. 
-        - [Next product...]
-        Do not include any source references in the bullet points.
+        Based on the search results, here's the information about [topic of the question]:
+        - [Key point or feature 1]
+        - [Key point or feature 2]
+        - [Key point or feature 3]
+        [Additional information if necessary]
 
         Answer:
         """
 
         prompt = PromptTemplate(template=prompt_template, input_variables=["context", "chat_history", "question"])
 
-        # Create LLMChain
-        chain = LLMChain(llm=llm, prompt=prompt)
-
         # Generate response
-        logger.info("Generating response")
         messages = [
             SystemMessage(content=system_message),
             HumanMessage(content=prompt.format(
@@ -202,19 +182,17 @@ def lambda_handler(event, context):
                 question=user_input
             ))
         ]
-        answer = llm(messages).content
-      
-        logger.info(f"AI response: {answer}")
+
+        # Generate the full response
+        full_response = "".join(llm._generate(messages))
 
         # Add the AI's response to the chat history
-        logger.info("Adding AI response to chat history")
-        message_history.add_ai_message(answer)
-        logger.info("AI response added successfully")
+        message_history.add_ai_message(full_response)
 
         return {
             'statusCode': 200,
             'query': user_input,
-            'generated_response': answer         
+            'generated_response': full_response
         }
 
     except Exception as e:
