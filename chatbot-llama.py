@@ -2,7 +2,7 @@ import json
 import os
 import boto3
 import time
-from typing import Any, List, Mapping, Optional
+from typing import Any, List, Mapping, Optional, Iterator
 from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
@@ -54,21 +54,29 @@ class BedrockLlama3ChatModel(BaseChatModel):
             "top_p": self.top_p
         })
 
-        response = self.client.invoke_model(
+        response_stream = self.client.invoke_model_with_response_stream(
             modelId=self.model_id,
             contentType="application/json",
             accept="application/json",
             body=body
         )
 
-        response_body = json.loads(response.get('body').read())
-        full_response = response_body.get('generation')
+        full_response = self._process_stream(response_stream)
         
         logger.info(f"Bedrock Llama 3 model response: {full_response}")
         
         ai_message = AIMessage(content=full_response)
         chat_generation = ChatGeneration(message=ai_message)
         return ChatResult(generations=[chat_generation])
+
+    def _process_stream(self, response_stream: Iterator[Any]) -> str:
+        full_response = ""
+        for event in response_stream['body']:
+            if 'chunk' in event:
+                chunk = json.loads(event['chunk']['bytes'].decode())
+                if 'generation' in chunk:
+                    full_response += chunk['generation']
+        return full_response.strip()
 
     def _convert_messages_to_prompt(self, messages: List[BaseMessage]) -> str:
         prompt = ""
