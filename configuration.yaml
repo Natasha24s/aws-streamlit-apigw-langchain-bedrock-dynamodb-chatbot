@@ -441,8 +441,8 @@ Resources:
         Variables:
           KNOWLEDGE_BASE_ID: 'dummy-knowledge-base-id'
           BEDROCK_MODEL_ID: 'dummy-bedrock-model-id'
-          GUARDRAIL_ID: !Ref ProductAvailabilityGuardrail
-          GUARDRAIL_VERSION: !Ref ProductAvailabilityGuardrailVersion
+          GUARDRAIL_ID: !GetAtt ProductAvailabilityGuardrailVersion.GuardrailId
+          GUARDRAIL_VERSION: !GetAtt ProductAvailabilityGuardrailVersion.Version
 
   # Lambda Permission for API Gateway
   LambdaPermission:
