@@ -78,9 +78,8 @@ Update the following environment variables in the Lambda function code:
 
 - `bedrock_model_id`: Find this in the Bedrock console under "Model access". Make sure that you have requested access to these models in bedrock.
 - `knowledge_base_id`: Use the ID noted from step 3
-- `region_name`: Your AWS region
 
-![](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/environment%20variables.png)
+![](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/environmentv.png)
 
 ### 5. Update Lambda Layer
 
