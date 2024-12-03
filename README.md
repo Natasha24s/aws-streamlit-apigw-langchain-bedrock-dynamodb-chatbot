@@ -30,7 +30,7 @@ This repository contains the code and instructions for deploying a chatbot using
 
 ### 1. Deploy CloudFormation Stack
 
-1. Download the [chatbot-complete-template.yaml](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/chatbot-complete-template.yaml) file.
+1. Download the [configuration.yaml](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/configuration.yaml) file.
 2. Open AWS and select a region of your choice.
 3. Open Cloudformation and click on `Create Stack` and select the downloaded template.
 4. It will deploy the following resources:
@@ -39,6 +39,7 @@ This repository contains the code and instructions for deploying a chatbot using
 - Lambda Function
 - DynamoDB Table
 - S3 Bucket
+- Bedrock Guardrails
 - IAM Roles and Policies
 
 ### 2. Upload CSV Files to S3
@@ -75,7 +76,7 @@ Follow these steps to create and sync a knowledge base in Amazon Bedrock:
 
 Update the following environment variables in the Lambda function code:
 
-- `bedrock_model_id`: Find this in the Bedrock console under "Model access"
+- `bedrock_model_id`: Find this in the Bedrock console under "Model access". Make sure that you have requested access to these models in bedrock.
 - `knowledge_base_id`: Use the ID noted from step 3
 - `region_name`: Your AWS region
 
@@ -83,7 +84,7 @@ Update the following environment variables in the Lambda function code:
 
 ### 5. Update Lambda Layer
 
-Upload the provided layer.ZIP file as a new layer for the Lambda function.
+Upload the provided layer.ZIP file as a new layer for the Lambda function. Specify x86_64 for Compatible architectures and python3.11 for Compatible runtimes.
 
 ### 6. Get API Gateway Invoke URL
 
@@ -98,13 +99,13 @@ Follow the instructions in `streamlit-apigateway-frontend.md` to deploy the Stre
 
 ### 8. Update API Gateway Endpoint
 
-In the Streamlit app code, update the `config.py` file to use your own API Gateway endpoint URL you got in step 6.
+Open Visual Studio, in the Streamlit app code, update the `config.py` file to use your own API Gateway endpoint URL you got in step 6.
 
 ![Alt text](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/config.py%20file.png)
 
 ### 9. Run the Streamlit App
 
-To run the app locally:
+Run the app using:
    
 `streamlit run src/app.py`
 
