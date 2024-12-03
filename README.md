@@ -87,9 +87,9 @@ Upload the provided layer.ZIP file as a new layer for the Lambda function. Speci
 
 ### 6. Get API Gateway Invoke URL
 
-Fetch the Invoke URL from the API Gateway console. You'll need this for the frontend integration.
+Fetch the Invoke URL from the output section of CloudFormation console where you have deployed the stack. You'll need this for the frontend integration.
 
-![](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/api%20gateway%20invoke%20url.png)
+![](https://github.com/Natasha24s/aws-streamlit-apigw-langchain-bedrock-dynamodb-chatbot/blob/main/images/output.png)
 
 ### 7. Deploy Streamlit Frontend
 
