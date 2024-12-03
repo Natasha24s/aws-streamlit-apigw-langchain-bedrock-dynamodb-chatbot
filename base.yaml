@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Chatbot Infrastructure with AWS Bedrock, API Gateway, Lambda, and DynamoDB'
+Description: 'Chatbot Infrastructure with AWS Bedrock, API Gateway, Lambda, DynamoDB, and Guardrail'
 
 Parameters:
   BucketName:
@@ -58,6 +58,14 @@ Resources:
                 Action:
                   - kendra:Retrieve
                 Resource: '*'
+        - PolicyName: BedrockGuardrailAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:EvaluateGuardrail
+                Resource: !GetAtt ProductAvailabilityGuardrail.Arn
 
   # DynamoDB Table
   ConversationHistoryTable:
@@ -121,6 +129,29 @@ Resources:
       RestApiId: !Ref ChatbotApi
       StageName: prod
 
+  # Guardrail for Product Availability
+  ProductAvailabilityGuardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      BlockedInputMessaging: "I'm sorry, but I can't process queries about specific product availability."
+      BlockedOutputsMessaging: "I apologize, but I can't provide specific information about product availability."
+      ContentPolicyConfig:
+        FiltersConfig:
+          - InputStrength: "MEDIUM"
+            OutputStrength: "HIGH"
+            Type: "VIOLENCE"
+      Description: "Guardrail designed to block detailed queries and responses about product availability"
+      Name: "ProductAvailabilityGuardrail"
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Definition: "Specific information about the current stock or availability of products"
+            Examples:
+              - "Is this product in stock?"
+              - "When will you have more of this item?"
+              - "How many units of this product are available?"
+            Name: "ProductAvailability"
+            Type: "DENY"
+
   # Lambda Function
   ChatbotLambda:
     Type: AWS::Lambda::Function
@@ -152,6 +183,7 @@ Resources:
 
           # Initialize AWS clients
           bedrock_runtime = boto3.client("bedrock-runtime")
+          bedrock = boto3.client('bedrock')
           dynamodb = boto3.client('dynamodb')
 
           class BedrockLlama3ChatModel(BaseChatModel):
@@ -221,10 +253,12 @@ Resources:
               # Get environment variables
               bedrock_model_id = os.environ['BEDROCK_MODEL_ID']
               knowledge_base_id = os.environ['KNOWLEDGE_BASE_ID']
-              region_name = boto3.session.Session().region_name  # Get the region dynamically
+              guardrail_id = os.environ['GUARDRAIL_ID']
+              region_name = boto3.session.Session().region_name
 
               logger.info(f"Using Bedrock Model ID: {bedrock_model_id}")
               logger.info(f"Using Knowledge Base ID: {knowledge_base_id}")
+              logger.info(f"Using Guardrail ID: {guardrail_id}")
               logger.info(f"Using Region: {region_name}")
 
               # Define system message
@@ -256,6 +290,21 @@ Resources:
                       return {
                           'statusCode': 400,
                           'body': json.dumps({'error': 'No query provided in the event'})
+                      }
+
+                  # Apply guardrail to user input
+                  guardrail_response = bedrock.evaluate_guardrail(
+                      guardrailId=guardrail_id,
+                      inputText=user_input
+                  )
+
+                  if guardrail_response['results'][0]['blocklistMatched']:
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'query': user_input,
+                              'generated_response': guardrail_response['results'][0]['outputText']
+                          })
                       }
 
                   # Initialize DynamoDBChatMessageHistory
@@ -324,8 +373,10 @@ Resources:
 
                   return {
                       'statusCode': 200,
-                      'query': user_input,
-                      'generated_response': full_response
+                      'body': json.dumps({
+                          'query': user_input,
+                          'generated_response': full_response
+                      })
                   }
 
               except Exception as e:
@@ -344,6 +395,7 @@ Resources:
         Variables:
           KNOWLEDGE_BASE_ID: 'dummy-knowledge-base-id'
           BEDROCK_MODEL_ID: 'dummy-bedrock-model-id'
+          GUARDRAIL_ID: !Ref ProductAvailabilityGuardrail
 
   # Lambda Permission for API Gateway
   LambdaPermission:
@@ -366,3 +418,8 @@ Outputs:
   S3BucketName:
     Description: S3 Bucket Name
     Value: !Ref ChatbotBucket
+
+  GuardrailId: 
+    Description: Guardrail ID
+    Value: !Ref ProductAvailabilityGuardrail
+
