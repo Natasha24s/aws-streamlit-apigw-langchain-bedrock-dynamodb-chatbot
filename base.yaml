@@ -64,8 +64,8 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - bedrock:EvaluateGuardrail
-                Resource: !GetAtt ProductAvailabilityGuardrail.Arn
+                  - bedrock:ApplyGuardrail
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:guardrail/${ProductAvailabilityGuardrail}'
 
   # DynamoDB Table
   ConversationHistoryTable:
@@ -183,7 +183,6 @@ Resources:
 
           # Initialize AWS clients
           bedrock_runtime = boto3.client("bedrock-runtime")
-          bedrock = boto3.client('bedrock')
           dynamodb = boto3.client('dynamodb')
 
           class BedrockLlama3ChatModel(BaseChatModel):
@@ -254,11 +253,13 @@ Resources:
               bedrock_model_id = os.environ['BEDROCK_MODEL_ID']
               knowledge_base_id = os.environ['KNOWLEDGE_BASE_ID']
               guardrail_id = os.environ['GUARDRAIL_ID']
+              guardrail_version = os.environ.get('GUARDRAIL_VERSION', '1')  # Default to version '1' if not specified
               region_name = boto3.session.Session().region_name
 
               logger.info(f"Using Bedrock Model ID: {bedrock_model_id}")
               logger.info(f"Using Knowledge Base ID: {knowledge_base_id}")
               logger.info(f"Using Guardrail ID: {guardrail_id}")
+              logger.info(f"Using Guardrail Version: {guardrail_version}")
               logger.info(f"Using Region: {region_name}")
 
               # Define system message
@@ -293,19 +294,27 @@ Resources:
                       }
 
                   # Apply guardrail to user input
-                  guardrail_response = bedrock.evaluate_guardrail(
-                      guardrailId=guardrail_id,
-                      inputText=user_input
-                  )
-
-                  if guardrail_response['results'][0]['blocklistMatched']:
-                      return {
-                          'statusCode': 200,
-                          'body': json.dumps({
-                              'query': user_input,
-                              'generated_response': guardrail_response['results'][0]['outputText']
-                          })
-                      }
+                  try:
+                      guardrail_response = bedrock_runtime.apply_guardrail(
+                          guardrailIdentifier=guardrail_id,
+                          guardrailVersion=guardrail_version,
+                          source='INPUT',
+                          content=[{"text": user_input}]
+                      )
+                      
+                      logger.info(f"Guardrail Response: {json.dumps(guardrail_response, indent=2)}")
+                      
+                      if guardrail_response['action'] == 'GUARDRAIL_INTERVENED':
+                          return {
+                              'statusCode': 200,
+                              'body': json.dumps({
+                                  'query': user_input,
+                                  'generated_response': guardrail_response['outputs'][0]['text']
+                              })
+                          }
+                  except Exception as e:
+                      logger.error(f"Error applying guardrail: {str(e)}")
+                      # Continue with the chatbot logic if guardrail application fails
 
                   # Initialize DynamoDBChatMessageHistory
                   message_history = DynamoDBChatMessageHistory(
@@ -388,7 +397,7 @@ Resources:
                           'details': str(e)
                       })
                   }
-      Runtime: python3.9
+      Runtime: python3.11
       Timeout: 300
       MemorySize: 256
       Environment:
@@ -396,6 +405,7 @@ Resources:
           KNOWLEDGE_BASE_ID: 'dummy-knowledge-base-id'
           BEDROCK_MODEL_ID: 'dummy-bedrock-model-id'
           GUARDRAIL_ID: !Ref ProductAvailabilityGuardrail
+          GUARDRAIL_VERSION: '1'
 
   # Lambda Permission for API Gateway
   LambdaPermission:
