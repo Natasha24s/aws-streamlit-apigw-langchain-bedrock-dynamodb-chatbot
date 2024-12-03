@@ -1,0 +1,420 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Chatbot Infrastructure with AWS Bedrock, API Gateway, Lambda, DynamoDB, and Guardrail'
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name for the S3 bucket (must be globally unique)
+
+Resources:
+  # S3 Bucket
+  ChatbotBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:*
+                Resource: '*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt ConversationHistoryTable.Arn
+        - PolicyName: KnowledgeBasesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kendra:Retrieve
+                Resource: '*'
+        - PolicyName: BedrockGuardrailAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:ApplyGuardrail
+                Resource: !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:guardrail/${ProductAvailabilityGuardrail}'
+
+  # DynamoDB Table
+  ConversationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ConversationHistory
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: SessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: SessionId
+          KeyType: HASH
+
+  # API Gateway
+  ChatbotApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: ChatbotAPI
+      Description: API for Chatbot
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ChatbotApi.RootResourceId
+      PathPart: chat
+      RestApiId: !Ref ChatbotApi
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId: !Ref ApiResource
+      RestApiId: !Ref ChatbotApi
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatbotLambda.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            SelectionPattern: ''
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseModels:
+            application/json: 'Empty'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref ChatbotApi
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiDeployment
+      RestApiId: !Ref ChatbotApi
+      StageName: prod
+
+  # Guardrail for Product Availability
+  ProductAvailabilityGuardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      BlockedInputMessaging: "I'm sorry, but I can't process queries about specific product availability."
+      BlockedOutputsMessaging: "I apologize, but I can't provide specific information about product availability."
+      ContentPolicyConfig:
+        FiltersConfig:
+          - InputStrength: "MEDIUM"
+            OutputStrength: "HIGH"
+            Type: "VIOLENCE"
+      Description: "Guardrail designed to block detailed queries and responses about product availability"
+      Name: "ProductAvailabilityGuardrail"
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Definition: "Specific information about the current stock or availability of products"
+            Examples:
+              - "Is this product in stock?"
+              - "When will you have more of this item?"
+              - "How many units of this product are available?"
+            Name: "ProductAvailability"
+            Type: "DENY"
+
+  ChatbotLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          import time
+          from typing import Any, List, Mapping, Optional
+          from langchain.callbacks.manager import CallbackManagerForLLMRun
+          from langchain.prompts import PromptTemplate
+          import logging
+          from langchain.schema import AIMessage, BaseMessage, ChatResult, HumanMessage, SystemMessage
+          from langchain_community.retrievers import AmazonKnowledgeBasesRetriever
+          from langchain.chat_models.base import BaseChatModel
+          from langchain_community.chat_message_histories import DynamoDBChatMessageHistory
+          import uuid
+
+          # Set up logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          # Initialize AWS clients
+          bedrock_runtime = boto3.client("bedrock-runtime")
+          dynamodb = boto3.client('dynamodb')
+
+          class BadRequestError(Exception):
+              pass
+
+          class BedrockLlama3ChatModel(BaseChatModel):
+              model_id: str
+              client: Any
+              model_kwargs: Mapping[str, Any] = {}
+
+              def _generate(
+                  self,
+                  messages: List[BaseMessage],
+                  stop: Optional[List[str]] = None,
+                  run_manager: Optional[CallbackManagerForLLMRun] = None,
+                  **kwargs: Any,
+              ) -> ChatResult:
+                  prompt = self._convert_messages_to_prompt(messages)
+                  params = {
+                      "prompt": prompt,
+                      "max_gen_len": self.model_kwargs.get("max_tokens", 512),
+                      "temperature": self.model_kwargs.get("temperature", 0.7),
+                      "top_p": self.model_kwargs.get("top_p", 0.9),
+                  }
+
+                  body = json.dumps(params)
+                  response = self.client.invoke_model(
+                      body=body,
+                      modelId=self.model_id,
+                      accept="application/json",
+                      contentType="application/json",
+                  )
+
+                  response_body = json.loads(response.get("body").read())
+                  text = response_body.get("generation")
+
+                  return ChatResult(generations=[AIMessage(content=text)])
+
+              def _convert_messages_to_prompt(self, messages: List[BaseMessage]) -> str:
+                  prompt = ""
+                  for message in messages:
+                      if isinstance(message, HumanMessage):
+                          prompt += f"Human: {message.content}\n"
+                      elif isinstance(message, AIMessage):
+                          prompt += f"AI: {message.content}\n"
+                      elif isinstance(message, SystemMessage):
+                          prompt += f"System: {message.content}\n"
+                  prompt += "AI: "
+                  return prompt
+
+          def apply_guardrail(content, guardrail_id, guardrail_version):
+              result = bedrock_runtime.apply_guardrail(
+                  guardrailIdentifier=guardrail_id,
+                  guardrailVersion=guardrail_version,
+                  source="INPUT",
+                  content=[
+                      {
+                          "text": {
+                              "text": content,
+                              "qualifiers": [
+                                  "guard_content",
+                              ],
+                          }
+                      },
+                  ],
+              )
+              if result["action"] != "NONE":
+                  logger.warning(
+                      f"Guardrail ({guardrail_id}) intervened ({result['ResponseMetadata']['RequestId']})"
+                  )
+                  raise BadRequestError("Content was blocked by guardrail")
+
+              return content
+
+          def lambda_handler(event, context):
+              logger.info(f"Received event: {json.dumps(event, indent=2)}")
+
+              # Get environment variables
+              bedrock_model_id = os.environ['BEDROCK_MODEL_ID']
+              knowledge_base_id = os.environ['KNOWLEDGE_BASE_ID']
+              guardrail_id = os.environ['GUARDRAIL_ID']
+              guardrail_version = os.environ.get('GUARDRAIL_VERSION', '1')
+              region_name = boto3.session.Session().region_name
+
+              session_id = str(uuid.uuid4())
+
+              logger.info(f"Using Bedrock Model ID: {bedrock_model_id}")
+              logger.info(f"Using Knowledge Base ID: {knowledge_base_id}")
+              logger.info(f"Using Guardrail ID: {guardrail_id}")
+              logger.info(f"Using Guardrail Version: {guardrail_version}")
+              logger.info(f"Using Region: {region_name}")
+
+              system_message = """
+              You are an AI assistant for product information. Be concise in your responses. Always be polite and professional.
+              Never provide information about competitors' products.
+              Do not discuss availability. If asked, say this information changes frequently and encourage users to visit our website or contact customer service for the most up-to-date information.
+              Always respect user privacy and do not ask for or store personal information.
+              """
+
+              llm = BedrockLlama3ChatModel(
+                  model_id=bedrock_model_id, 
+                  client=bedrock_runtime,
+                  model_kwargs={"max_tokens": 512, "temperature": 0.7, "top_p": 0.9}
+              )
+
+              try:
+                  user_input = event.get('query')
+
+                  logger.info(f"User input: {user_input}")
+                  logger.info(f"Session ID: {session_id}")
+
+                  if not user_input:
+                      logger.error("No query provided in the event")
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'No query provided in the event'})
+                      }
+
+                  try:
+                      apply_guardrail(user_input, guardrail_id, guardrail_version)
+                  except BadRequestError as e:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({
+                              'error': str(e),
+                              'query': user_input
+                          })
+                      }
+
+                  message_history = DynamoDBChatMessageHistory(
+                      table_name="ConversationHistory",
+                      session_id=session_id,
+                  )
+
+                  chat_history = message_history.messages
+
+                  message_history.add_user_message(user_input)
+
+                  retriever = AmazonKnowledgeBasesRetriever(
+                      knowledge_base_id=knowledge_base_id,
+                      retrieval_config={"vectorSearchConfiguration": {"numberOfResults": 4}},
+                      region_name=region_name,
+                      return_source_documents=True
+                  )
+
+                  docs = retriever.get_relevant_documents(user_input)
+                  context = "\n".join([f"Source {i+1}: {doc.page_content}" for i, doc in enumerate(docs)])
+
+                  prompt_template = """
+                  Use the following context and chat history to answer the question. Your response should be a concise summary of the information found in the search results, with key points or features listed in bullet points if appropriate.
+
+                  Context:
+                  {context}
+
+                  Chat History:
+                  {chat_history}
+
+                  Question: {question}
+
+                  Generate a response in the following format:
+                  Based on the search results, here's the information about [topic of the question]:
+                  - [Key point or feature 1]
+                  - [Key point or feature 2]
+                  - [Key point or feature 3]
+                  [Additional information if necessary]
+
+                  Answer:
+                  """
+
+                  prompt = PromptTemplate(template=prompt_template, input_variables=["context", "chat_history", "question"])
+
+                  messages = [
+                      SystemMessage(content=system_message),
+                      HumanMessage(content=prompt.format(
+                          context=context, 
+                          chat_history="\n".join([f"{m.type}: {m.content}" for m in chat_history]), 
+                          question=user_input
+                      ))
+                  ]
+
+                  chat_result = llm._generate(messages)
+                  full_response = chat_result.generations[0].text
+
+                  message_history.add_ai_message(full_response)
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'query': user_input,
+                          'generated_response': full_response
+                      })
+                  }
+
+              except Exception as e:
+                  logger.error(f"An error occurred: {str(e)}", exc_info=True)
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': 'An unexpected error occurred.',
+                          'details': str(e)
+                      })
+                  }
+
+      Runtime: python3.11
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          KNOWLEDGE_BASE_ID: 'dummy-knowledge-base-id'
+          BEDROCK_MODEL_ID: 'dummy-bedrock-model-id'
+          GUARDRAIL_ID: !Ref ProductAvailabilityGuardrail
+          GUARDRAIL_VERSION: '1'
+
+  # Lambda Permission for API Gateway
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ChatbotLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatbotApi}/*/POST/chat
+
+Outputs:
+  ApiEndpoint:
+    Description: API Endpoint URL
+    Value: !Sub https://${ChatbotApi}.execute-api.${AWS::Region}.amazonaws.com/prod/chat
+
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref ConversationHistoryTable
+
+  S3BucketName:
+    Description: S3 Bucket Name
+    Value: !Ref ChatbotBucket
+
+  GuardrailId: 
+    Description: Guardrail ID
+    Value: !Ref ProductAvailabilityGuardrail
+
