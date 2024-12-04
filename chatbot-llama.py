@@ -167,7 +167,8 @@ def lambda_handler(event, context):
         except BadRequestError as e:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': str(e)})
+                'query': user_input,
+                'generated_response': str(e)
             }
 
         # Initialize DynamoDBChatMessageHistory
@@ -238,7 +239,8 @@ def lambda_handler(event, context):
         except BadRequestError as e:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Generated response was blocked by guardrail'})
+                'query': user_input,
+                'generated_response': 'Generated response was blocked by guardrail'
             }
 
         # Add the AI's response to the chat history
