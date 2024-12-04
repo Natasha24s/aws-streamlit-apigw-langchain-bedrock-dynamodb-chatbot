@@ -23,6 +23,42 @@ logger.setLevel(logging.INFO)
 bedrock_runtime = boto3.client("bedrock-runtime")
 dynamodb = boto3.client('dynamodb')
 
+# Define Guardrail constants
+GUARDRAIL_ID = os.environ.get('GUARDRAIL_ID')
+GUARDRAIL_VERSION = os.environ.get('GUARDRAIL_VERSION')
+
+class BadRequestError(Exception):
+    pass
+
+def guardrail(content: str) -> str:
+    """Guard the content with Bedrock Guardrail. If the content is not flagged by Guardrail,
+    forward it to the next tool in chain.
+    """
+    result = bedrock_runtime.apply_guardrail(
+        guardrailIdentifier=GUARDRAIL_ID,
+        guardrailVersion=GUARDRAIL_VERSION,
+        source="INPUT",
+        content=[
+            {
+                "text": {
+                    "text": content,
+                    "qualifiers": [
+                        "guard_content",
+                    ],
+                }
+            },
+        ],
+    )
+    if result["action"] != "NONE":
+        logger.warning(
+            f"Guardrail ({GUARDRAIL_ID}) intervened ({result['ResponseMetadata']['RequestId']})"
+        )
+        raise BadRequestError("Content was blocked by guardrail")
+    else:
+        logger.info("Guardrail did not intervene")    
+
+    return content
+
 class BedrockLlama3ChatModel(BaseChatModel):
     model_id: str = Field(..., description="The Bedrock model ID")
     client: Any = Field(..., description="The Bedrock client")
@@ -88,7 +124,7 @@ def lambda_handler(event, context):
     logger.info(f"Received event: {json.dumps(event, indent=2)}")
 
     # Get environment variables
-    bedrock_model_id = "us.meta.llama3-1-70b-instruct-v1:0"
+    bedrock_model_id = os.environ['BEDROCK_MODEL_ID']
     knowledge_base_id = os.environ['KNOWLEDGE_BASE_ID']
 
     logger.info(f"Using Bedrock Model ID: {bedrock_model_id}")
@@ -125,6 +161,15 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': 'No query provided in the event'})
             }
 
+        # Apply guardrail to user input
+        try:
+            user_input = guardrail(user_input)
+        except BadRequestError as e:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': str(e)})
+            }
+
         # Initialize DynamoDBChatMessageHistory
         message_history = DynamoDBChatMessageHistory(
             table_name="ConversationHistory",
@@ -136,6 +181,7 @@ def lambda_handler(event, context):
 
         # Add the new user message to the history
         message_history.add_user_message(user_input)
+        logger.info(f"Added user message to DynamoDB: {user_input}")
 
         # Initialize AmazonKnowledgeBasesRetriever
         retriever = AmazonKnowledgeBasesRetriever(
@@ -186,13 +232,29 @@ def lambda_handler(event, context):
         # Generate the full response
         full_response = "".join(llm._generate(messages))
 
+        # Apply guardrail to the generated response
+        try:
+            full_response = guardrail(full_response)
+        except BadRequestError as e:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Generated response was blocked by guardrail'})
+            }
+
         # Add the AI's response to the chat history
         message_history.add_ai_message(full_response)
+        logger.info(f"Added AI message to DynamoDB: {full_response}")
+
+        # Log the current state of the conversation
+        logger.info(f"Current conversation state:")
+        for msg in message_history.messages:
+            logger.info(f"  {msg.type}: {msg.content}")
 
         return {
             'statusCode': 200,
             'query': user_input,
             'generated_response': full_response
+            
         }
 
     except Exception as e:
