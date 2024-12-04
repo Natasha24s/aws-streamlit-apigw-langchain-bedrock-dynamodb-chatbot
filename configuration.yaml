@@ -133,22 +133,21 @@ Resources:
   ProductAvailabilityGuardrail:
     Type: AWS::Bedrock::Guardrail
     Properties:
-      BlockedInputMessaging: "I'm sorry, but I can't process queries about specific product availability."
-      BlockedOutputsMessaging: "I apologize, but I can't provide specific information about product availability."
+      BlockedInputMessaging: "I'm sorry, but I can't process queries about availability."
+      BlockedOutputsMessaging: "I apologize, but I can't provide specific information about availability."
       ContentPolicyConfig:
         FiltersConfig:
           - InputStrength: "MEDIUM"
             OutputStrength: "HIGH"
             Type: "VIOLENCE"
-      Description: "Guardrail designed to block detailed queries and responses about product availability"
+      Description: "Guardrail designed to block detailed queries and responses about availability"
       Name: "ProductAvailabilityGuardrail"
       TopicPolicyConfig:
         TopicsConfig:
           - Definition: "Specific information about the current stock or availability of products"
             Examples:
-              - "Is this product in stock?"
               - "When will you have more of this item?"
-              - "How many units of this product are available?"
+              - "Is this available?"
             Name: "ProductAvailability"
             Type: "DENY"
 
