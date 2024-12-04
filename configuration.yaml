@@ -350,12 +350,12 @@ Resources:
                   # Add the new user message to the history
                   message_history.add_user_message(user_input)
                   logger.info(f"Added user message to DynamoDB: {user_input}")
-
+                  current_region = os.environ['AWS_REGION']
                   # Initialize AmazonKnowledgeBasesRetriever
                   retriever = AmazonKnowledgeBasesRetriever(
                       knowledge_base_id=knowledge_base_id,
                       retrieval_config={"vectorSearchConfiguration": {"numberOfResults": 4}},
-                      region_name="us-east-2",
+                      region_name=current_region,
                       return_source_documents=True
                   )
 
