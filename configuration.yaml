@@ -144,7 +144,7 @@ Resources:
       Name: "ProductAvailabilityGuardrail"
       TopicPolicyConfig:
         TopicsConfig:
-          - Definition: "Specific information about the current stock or availability of products"
+          - Definition: "Specific information about the current stock or availability"
             Examples:
               - "When will you have more of this item?"
               - "Is this available?"
