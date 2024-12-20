@@ -125,19 +125,6 @@ Resources:
           ResponseModels:
             application/json: 'Empty'
 
-  ApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiMethod
-    Properties:
-      RestApiId: !Ref ChatbotApi
-
-  ApiStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      DeploymentId: !Ref ApiDeployment
-      RestApiId: !Ref ChatbotApi
-      StageName: prod
-
   # Guardrail for Product Availability
   ProductAvailabilityGuardrail:
     Type: AWS::Bedrock::Guardrail
@@ -503,20 +490,14 @@ Resources:
             application/json: 'Empty'
 
   # Update the API deployment to include the new Slack endpoint
-  UpdatedApiDeployment:
+  ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - ApiMethod
       - SlackApiMethod
     Properties:
       RestApiId: !Ref ChatbotApi
-
-  UpdatedApiStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      DeploymentId: !Ref UpdatedApiDeployment
-      RestApiId: !Ref ChatbotApi
-      StageName: prod
+      StageName: prod  # This will update the existing 'prod' stage
 
 Outputs:
   ApiEndpoint:
