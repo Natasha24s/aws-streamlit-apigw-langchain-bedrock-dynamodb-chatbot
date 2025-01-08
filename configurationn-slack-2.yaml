@@ -5,7 +5,7 @@ Parameters:
   BucketName:
     Type: String
     Description: Name for the S3 bucket (must be globally unique)
-  SlackBotToken:
+  SlackBotTokenParam:
     Type: String
     Description: "Enter your Slack Bot Token (starts with xoxb-)"
     NoEcho: true
@@ -78,7 +78,7 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                   - secretsmanager:DescribeSecret
-                Resource: !Ref SlackBotToken
+                Resource: !Ref SlackBotTokenSecret
 
   # DynamoDB Table
   ConversationHistoryTable:
@@ -473,7 +473,7 @@ Resources:
           BEDROCK_MODEL_ID: 'dummy-bedrock-model-id'
           GUARDRAIL_ID: !GetAtt ProductAvailabilityGuardrailVersion.GuardrailId
           GUARDRAIL_VERSION: !GetAtt ProductAvailabilityGuardrailVersion.Version
-          SLACK_BOT_TOKEN_SECRET: !Ref SlackBotToken
+          SLACK_BOT_TOKEN_SECRET: !Ref SlackBotTokenSecret
 
   # Lambda Permission for API Gateway
   LambdaPermission:
@@ -485,10 +485,10 @@ Resources:
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ChatbotApi}/*/POST/chat
 
   # Slack Bot Token Secret
-  SlackBotToken:
+  SlackBotTokenSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      SecretString: !Sub '{"token":"${SlackBotToken}"}'
+      SecretString: !Sub '{"token":"${SlackBotTokenParam}"}'
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
 
@@ -555,4 +555,4 @@ Outputs:
 
   SlackBotTokenSecret:
     Description: The Secret containing the Slack Bot Token
-    Value: !Ref SlackBotToken
+    Value: !Ref SlackBotTokenSecret
